@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Discord Safe Mass Delete
 // @namespace    local.discord.safe.delete
-// @version      1.0.1
+// @version      1.0.2
 // @author       Rayshen
 // @description  Mass delete your own Discord messages with conservative rate-limit handling.
 // @homepageURL  https://github.com/RayshenOmega
@@ -150,8 +150,10 @@
     const data = await response.json();
     if (!Array.isArray(data)) return [];
 
+    const channelTypesToScan = new Set([0, 5, 10, 11, 12]);
+
     return data
-      .filter(channel => channel && (channel.type === 0 || channel.type === 5))
+      .filter(channel => channel && channelTypesToScan.has(channel.type))
       .sort((a, b) => {
         const aPos = Number.isFinite(a?.position) ? a.position : 0;
         const bPos = Number.isFinite(b?.position) ? b.position : 0;
@@ -341,23 +343,27 @@
       : userId;
 
     let offset = 0;
+    let stalePageCount = 0;
     const seenMessageIds = new Set();
 
-    while (totals.deleted < opts.limit) {
+    while (totals.scanned < opts.scanLimit && totals.deleted < opts.limit) {
       if (state.cancelled) throw new Error("Operation cancelled.");
 
-      const search = await searchGuildMessages(token, opts.guildId, authorId, opts.dryRun ? offset : 0, opts.maxRetries, setStatus);
+      const search = await searchGuildMessages(token, opts.guildId, authorId, offset, opts.maxRetries, setStatus);
       const page = search.messages;
       if (page.length === 0) break;
 
-      let progressed = false;
+      let pageHasNewMessages = false;
+      let pageMatched = false;
 
       for (const message of page) {
         if (!message?.id || seenMessageIds.has(message.id)) continue;
         seenMessageIds.add(message.id);
+        pageHasNewMessages = true;
 
         if (state.cancelled) throw new Error("Operation cancelled.");
         if (totals.deleted >= opts.limit) break;
+        if (totals.scanned >= opts.scanLimit) break;
 
         totals.scanned++;
 
@@ -374,7 +380,7 @@
         }
 
         totals.matched++;
-        progressed = true;
+        pageMatched = true;
 
         if (!opts.dryRun) {
           const spacing = opts.minDelayMs + randomInt(0, opts.jitterMs);
@@ -406,10 +412,21 @@
         );
       }
 
-      if (opts.dryRun) {
+      if (!pageHasNewMessages) {
+        stalePageCount++;
+      } else {
+        stalePageCount = 0;
+      }
+
+      if (opts.dryRun || !pageMatched) {
         offset += page.length;
         if (offset >= search.totalResults) break;
-      } else if (!progressed) {
+      } else {
+        offset = 0;
+      }
+
+      if (stalePageCount >= 8) {
+        setStatus("Search results stopped progressing. Ending to avoid infinite loop.");
         break;
       }
     }
