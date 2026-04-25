@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Discord Safe Mass Delete
 // @namespace    local.discord.safe.delete
-// @version      1.0.0
+// @version      1.0.1
 // @author       Rayshen
 // @description  Mass delete your own Discord messages with conservative rate-limit handling.
 // @homepageURL  https://github.com/RayshenOmega
@@ -33,6 +33,13 @@
     const n = Number(value);
     if (!Number.isFinite(n)) return fallback;
     return Math.max(min, Math.min(max, Math.floor(n)));
+  }
+
+  function parseScanLimit(value, fallback) {
+    const n = Number(value);
+    if (!Number.isFinite(n)) return fallback;
+    if (n <= 0) return Number.MAX_SAFE_INTEGER;
+    return Math.max(1, Math.floor(n));
   }
 
   function detectChannelIdFromUrl() {
@@ -439,8 +446,8 @@
       <input id="dsmd-confirm" type="text" placeholder="Type DELETE" />
       <details>
         <summary>Advanced safety controls</summary>
-        <label>Scan limit</label>
-        <input id="dsmd-scanLimit" type="number" min="100" max="100000" value="1200" />
+        <label>Scan limit (0 = unlimited)</label>
+        <input id="dsmd-scanLimit" type="number" min="0" value="0" />
         <label>Min delay ms</label>
         <input id="dsmd-minDelayMs" type="number" min="250" max="8000" value="850" />
         <label>Jitter ms</label>
@@ -765,7 +772,7 @@
         dateTo,
         useUserId,
         filterUserIds,
-        scanLimit: deleteAll ? Number.MAX_SAFE_INTEGER : clampInt(el.scanLimit.value, Math.max(500, limit * 12), 100, 100000),
+        scanLimit: deleteAll ? Number.MAX_SAFE_INTEGER : parseScanLimit(el.scanLimit.value, Number.MAX_SAFE_INTEGER),
         minDelayMs: clampInt(el.minDelayMs.value, 850, 250, 8000),
         jitterMs: clampInt(el.jitterMs.value, 250, 0, 5000),
         burstCount: clampInt(el.burstCount.value, 6, 1, 100),

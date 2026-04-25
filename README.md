@@ -171,6 +171,8 @@ This is a safety confirmation to prevent accidental execution.
 
 Controls how many messages can be scanned in non-unbounded modes.
 
+Set this to `0` for unlimited scanning.
+
 Higher values improve coverage but increase request volume and runtime.
 
 ### Min Delay ms
